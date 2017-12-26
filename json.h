@@ -8,7 +8,7 @@
 #include <stdio.h>
 #endif
 
-typedef struct _JSON JSON;
+typedef struct JSON JSON;
 
 JSON *init_json_file(FILE *);
 
