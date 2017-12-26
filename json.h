@@ -11,5 +11,6 @@
 typedef struct JSON JSON;
 
 JSON *init_json_file(FILE *);
+void destroy_json(JSON *);
 
 #endif

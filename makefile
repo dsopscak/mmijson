@@ -1,4 +1,4 @@
-CFLAGS = -std=c99 -Wall
+CFLAGS = -std=c99 -Wall -Werror
 CC = gcc
 LIB_FILES = string.o \
 			json.o
