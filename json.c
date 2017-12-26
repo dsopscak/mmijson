@@ -1,6 +1,7 @@
 // json.c
 
 #include "json.h"
+#include "string.h"
 #include <stdlib.h>
 
 typedef struct MAP MAP;
@@ -47,13 +48,30 @@ struct ARRAY
 struct JSON
     {
     MAP *map;
+    char *work_buffer;
+    size_t work_buffer_size;
     };
 
-JSON *init_json_file(FILE *f)
+static JSON *create_json(void)
     {
     JSON *json = malloc(sizeof(JSON));
     json->map = malloc(sizeof(MAP));
     json->map->head = NULL;
+    json->work_buffer = malloc(1024);
+    json->work_buffer_size = 1024;
+
+    return json;
+    }
+
+static void parse_into_map(FILE *f, MAP *map)
+    {
+    }
+
+JSON *init_json_file(FILE *f)
+    {
+    JSON *json = create_json();
+
+    parse_into_map(f, json->map);
 
     return json;
     }
@@ -69,6 +87,8 @@ static void recurse_and_destroy_data(DATA *doomed)
             recurse_and_destroy_map(doomed->data.map);
         else if (doomed->type == array)
             recurse_and_destroy_array(doomed->data.array);
+        else
+            ret_json_string(doomed->data.string);
         free(doomed);
         }
     }
@@ -98,6 +118,7 @@ static void recurse_and_destroy_map_node(MAP_NODE *doomed)
         {
         recurse_and_destroy_map_node(doomed->next);
         recurse_and_destroy_data(doomed->data);
+        ret_json_string(doomed->key);
         free(doomed);
         }
     }
@@ -115,5 +136,7 @@ static void recurse_and_destroy_map(MAP *doomed)
 void destroy_json(JSON *doomed)
     {
     recurse_and_destroy_map(doomed->map);
+    free(doomed->work_buffer);
+    free(doomed);
     }
 
