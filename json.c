@@ -6,6 +6,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdbool.h>
+#include <ctype.h>
 
 typedef struct MAP MAP;
 typedef struct MAP_NODE MAP_NODE;
@@ -14,7 +15,7 @@ typedef struct ARRAY_NODE ARRAY_NODE;
 
 typedef struct DATA
     {
-    enum { map, array, string, number } type;
+    enum { map, array, string, number, boolean, null } type;
     union 
         {
         char *string;
@@ -30,7 +31,23 @@ static char *get_json_string_copy(const char *s)
     return copy;
     }
 
-static DATA *create_data_node_string(const char *s)
+static DATA *create_data_boolean(int b)
+    {
+    DATA *data = malloc(sizeof(DATA));
+    data->type = boolean;
+    data->data.string = b ? "true" : "false";
+    return data;
+    }
+
+ static DATA *create_data_null()
+    {
+    DATA *data = malloc(sizeof(DATA));
+    data->type = null;
+    data->data.string = "null";
+    return data;
+    }
+
+static DATA *create_data_string(const char *s)
     {
     DATA *data = malloc(sizeof(DATA));
     data->type = string;
@@ -38,7 +55,7 @@ static DATA *create_data_node_string(const char *s)
     return data;
     }
 
-static DATA *create_data_node_number(char *s)
+static DATA *create_data_number(char *s)
     {
     DATA *data = malloc(sizeof(DATA));
     data->type = number;
@@ -64,13 +81,21 @@ struct MAP
     MAP_NODE *head;
     };
 
-static DATA *create_data_node_map()
+static DATA *create_data_map()
     {
     DATA *data = malloc(sizeof(DATA));
     data->type = map;
     data->data.map = malloc(sizeof(MAP));
     data->data.map->head = NULL;
     return data;
+    }
+
+static int skip_whitespace(FILE *f)
+    {
+    char c;
+    while ((isspace(c = fgetc(f))))
+        ;
+    return c;
     }
 
 static void put_data_map(MAP *map, const char *key, DATA *data)
@@ -115,7 +140,7 @@ struct ARRAY
     ARRAY_NODE *tail;
     };
 
-static DATA *create_data_node_array(char *s)
+static DATA *create_data_array()
     {
     DATA *data = malloc(sizeof(DATA));
     data->type = array;
@@ -142,7 +167,7 @@ static void put_data_array(ARRAY *array, DATA *data)
 
 struct JSON
     {
-    MAP *map;
+    DATA *data;
     char *work_buffer;
     size_t work_buffer_size;
     };
@@ -150,8 +175,7 @@ struct JSON
 static JSON *create_json(void)
     {
     JSON *json = malloc(sizeof(JSON));
-    json->map = malloc(sizeof(MAP));
-    json->map->head = NULL;
+    json->data = NULL;
     json->work_buffer = malloc(1024);
     json->work_buffer_size = 1024;
 
@@ -160,24 +184,62 @@ static JSON *create_json(void)
 
 static void parse_into_array(FILE *f, ARRAY *array)
     {
+    put_data_array(array, NULL);
     }
 
 static void parse_into_map(FILE *f, MAP *map)
     {
-
+    put_data_map(map, NULL, NULL);
     }
+
+static char *parse_string(FILE *f)
+    {
+    return NULL;
+    }
+
+static char *parse_number(FILE *f)
+    {
+    return NULL;
+    }
+
+static int parse_boolean(FILE *f)
+    {
+    return 0;
+    }
+
+static void parse_null(FILE *f)
+    {
+    }
+
 
 JSON *init_json_file(FILE *f)
     {
-    int c;
-    while ((c = fgetc(f)) != EOF)
-        if (c == '{') break;
-    if (c != '{')
-        return NULL;
-
     JSON *json = create_json();
-
-    parse_into_map(f, json->map);
+    int c = skip_whitespace(f);
+    switch (c)
+        {
+    case '{':
+        json->data = create_data_map();
+        parse_into_map(f, json->data->data.map);
+        break;
+    case '[':
+        json->data = create_data_array();
+        parse_into_array(f, json->data->data.array);
+        break;
+    case '"':
+        json->data = create_data_string(parse_string(f));
+        break;
+    case 't':
+    case 'f':
+        json->data = create_data_boolean(parse_boolean(f));
+        break;
+    case 'n':
+        parse_null(f);
+        json->data = create_data_null();
+        break;
+    default:
+        json->data = create_data_number(parse_number(f));
+        }
 
     return json;
     }
@@ -241,7 +303,7 @@ static void recurse_and_destroy_map(MAP *doomed)
 
 void destroy_json(JSON *doomed)
     {
-    recurse_and_destroy_map(doomed->map);
+    recurse_and_destroy_data(doomed->data);
     free(doomed->work_buffer);
     free(doomed);
     }
