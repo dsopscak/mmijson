@@ -8,10 +8,18 @@
 #include <stdbool.h>
 #include <ctype.h>
 
+#define BUF_INC 1024
+
 typedef struct MAP MAP;
 typedef struct MAP_NODE MAP_NODE;
 typedef struct ARRAY ARRAY;
 typedef struct ARRAY_NODE ARRAY_NODE;
+
+static void fatal(const char *msg)
+    {
+    fprintf(stderr, "Fatal JSON error: %s\n", msg);
+    exit(-1);
+    }
 
 typedef struct DATA
     {
@@ -169,17 +177,37 @@ struct JSON
     {
     DATA *data;
     char *work_buffer;
+    char *p;
     size_t work_buffer_size;
+    size_t i;
     };
 
 static JSON *create_json(void)
     {
     JSON *json = malloc(sizeof(JSON));
     json->data = NULL;
-    json->work_buffer = malloc(1024);
-    json->work_buffer_size = 1024;
+    json->work_buffer = malloc(BUF_INC);
+    json->work_buffer_size = BUF_INC;
 
     return json;
+    }
+
+static void init_work_buffer(JSON *json)
+    {
+    json->p = json->work_buffer;
+    json->i = 0;
+    }
+
+static void putc_work_buffer(JSON *json, char c)
+    {
+    if (json->i == json->work_buffer_size)
+        {
+        json->work_buffer_size += BUF_INC;
+        json->work_buffer = realloc(json->work_buffer, json->work_buffer_size);
+        json->p = json->work_buffer + json->i;
+        }
+    *json->p++ = c;
+    ++json->i;
     }
 
 static void parse_into_array(FILE *f, ARRAY *array)
@@ -192,23 +220,83 @@ static void parse_into_map(FILE *f, MAP *map)
     put_data_map(map, NULL, NULL);
     }
 
-static char *parse_string(FILE *f)
+static char *parse_string(FILE *f, JSON *json)
     {
-    return NULL;
+    int c;
+    init_work_buffer(json);
+    while ((c = fgetc(f)) != EOF)
+        {
+        if (c == '\\')
+            {
+            putc_work_buffer(json, c);
+            c = fgetc(f);
+            }
+        else if (c == '"')
+            break;
+
+        putc_work_buffer(json, c);
+        }
+
+    if (c != '"')
+        fatal("EOF before end of string");
+
+    putc_work_buffer(json, 0);
+    return json->work_buffer;
     }
 
-static char *parse_number(FILE *f)
+static char *parse_number(FILE *f, int c, JSON *json)
     {
+    init_work_buffer(json);
+    bool is_dotted = false;
+    if (c == '-' || isdigit(c))
+        {
+        putc_work_buffer(json, c);
+        while ((c = fgetc(f)) != EOF)
+            {
+            if (c == '.')
+                {
+                if (is_dotted)
+                    fatal("invalid number");
+                else
+                    is_dotted = true;
+                }
+            else if (!isdigit(c))
+                {
+                ungetc(c, f);
+                break;
+                }
+            putc_work_buffer(json, c);
+            }
+        putc_work_buffer(json, 0);
+        return json->work_buffer;
+        }
+    fatal("invalid number");
     return NULL;
     }
 
 static int parse_boolean(FILE *f)
     {
-    return 0;
+    int c;
+    if ((c =fgetc(f)) == 'r')
+        if (fgetc(f) == 'u')
+            if (fgetc(f) == 'e')
+                return 1;
+    if (c == 'a')
+        if (fgetc(f) == 'l')
+            if (fgetc(f) == 's')
+                if (fgetc(f) == 'e')
+                    return 0;
+    fatal("invalid boolean value");
+    return -1;
     }
 
 static void parse_null(FILE *f)
     {
+    if (fgetc(f) == 'u')
+        if (fgetc(f) == 'l')
+            if (fgetc(f) == 'l')
+                return;
+    fatal("invalid null value");
     }
 
 
@@ -227,7 +315,7 @@ JSON *init_json_file(FILE *f)
         parse_into_array(f, json->data->data.array);
         break;
     case '"':
-        json->data = create_data_string(parse_string(f));
+        json->data = create_data_string(parse_string(f, json));
         break;
     case 't':
     case 'f':
@@ -238,7 +326,7 @@ JSON *init_json_file(FILE *f)
         json->data = create_data_null();
         break;
     default:
-        json->data = create_data_number(parse_number(f));
+        json->data = create_data_number(parse_number(f, c, json));
         }
 
     return json;
