@@ -35,7 +35,7 @@ static DATA *create_data_boolean(int b)
     {
     DATA *data = malloc(sizeof(DATA));
     data->type = boolean;
-    data->data.string = b ? "true" : "false";
+    data->data.string = get_json_string_copy(b ? "true" : "false");
     return data;
     }
 
@@ -43,7 +43,7 @@ static DATA *create_data_boolean(int b)
     {
     DATA *data = malloc(sizeof(DATA));
     data->type = null;
-    data->data.string = "null";
+    data->data.string = get_json_string_copy("null");
     return data;
     }
 
