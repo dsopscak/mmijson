@@ -408,6 +408,9 @@ JSON *init_json_file(FILE *f)
         json->data = create_data_number(parse_number(f, c, json));
         }
 
+    if (skip_whitespace(f) != EOF)
+        fatal("invalid json, garbage at end");
+
     return json;
     }
 
