@@ -218,9 +218,36 @@ static char *parse_string(FILE *f, JSON *json)
         {
         if (c == '\\')
             {
-            putc_work_buffer(json, c);
             c = fgetc(f);
+            switch (c)
+                {
+            case '"':
+            case '/':
+            case '\\':
+                putc_work_buffer(json, c);
+                break;
+            case 'b':
+                putc_work_buffer(json, '\b');
+                break;
+            case 'f':
+                putc_work_buffer(json, '\f');
+                break;
+            case 'n':
+                putc_work_buffer(json, '\n');
+                break;
+            case 'r':
+                putc_work_buffer(json, '\r');
+                break;
+            case 't':
+                putc_work_buffer(json, '\t');
+                break;
+            default:
+                fatal("invalid escape sequence");
+                break;
+                }
             }
+        else if (c == '\n' || iscntrl(c))
+            fatal("invalid string");
         else if (c == '"')
             break;
 
