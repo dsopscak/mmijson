@@ -3,3 +3,4 @@ probably in pare_into_* functions.
 
 BUG: doesn't support unicode escape sequences
 
+BUG: segfaults on strings >= 1024 (the working buffer increment)
