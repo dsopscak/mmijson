@@ -210,16 +210,6 @@ static void putc_work_buffer(JSON *json, char c)
     ++json->i;
     }
 
-static void parse_into_array(FILE *f, ARRAY *array)
-    {
-    put_data_array(array, NULL);
-    }
-
-static void parse_into_map(FILE *f, MAP *map)
-    {
-    put_data_map(map, NULL, NULL);
-    }
-
 static char *parse_string(FILE *f, JSON *json)
     {
     int c;
@@ -300,6 +290,54 @@ static void parse_null(FILE *f)
     }
 
 
+static void parse_into_map(FILE *f, MAP *map, JSON *json);
+
+static void parse_into_array(FILE *f, ARRAY *array, JSON *json)
+    {
+    // put_data_array(array, NULL);
+    //
+    int c = skip_whitespace(f);
+    DATA *data;
+    switch (c)
+        {
+    case ']':
+        return;
+    case '{':
+        data = create_data_map();
+        parse_into_map(f, data->data.map, json);
+        break;
+    case '[':
+        data = create_data_array();
+        parse_into_array(f, data->data.array, json);
+        break;
+    case '"':
+        data = create_data_string(parse_string(f, json));
+        break;
+    case 't':
+    case 'f':
+        data = create_data_boolean(parse_boolean(f));
+        break;
+    case 'n':
+        parse_null(f);
+        data = create_data_null();
+        break;
+    default:
+        data = create_data_number(parse_number(f, c, json));
+        }
+    put_data_array(array, data);
+    c = skip_whitespace(f);
+    if (c == ',')
+        parse_into_array(f, array, json); // recursion
+    else if (c != ']')
+        fatal("invalid array");
+    }
+
+static void parse_into_map(FILE *f, MAP *map, JSON *json)
+    {
+    put_data_map(map, NULL, NULL);
+    }
+
+
 JSON *init_json_file(FILE *f)
     {
     JSON *json = create_json();
@@ -308,11 +346,11 @@ JSON *init_json_file(FILE *f)
         {
     case '{':
         json->data = create_data_map();
-        parse_into_map(f, json->data->data.map);
+        parse_into_map(f, json->data->data.map, json);
         break;
     case '[':
         json->data = create_data_array();
-        parse_into_array(f, json->data->data.array);
+        parse_into_array(f, json->data->data.array, json);
         break;
     case '"':
         json->data = create_data_string(parse_string(f, json));
