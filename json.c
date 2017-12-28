@@ -24,7 +24,7 @@ static void fatal(const char *msg)
 typedef struct DATA
     {
     enum { map, array, string, number, boolean, null } type;
-    union 
+    union
         {
         char *string;
         MAP *map;
@@ -127,7 +127,7 @@ static void put_data_map(MAP *map, char *key, DATA *data)
                 else
                     {
                     p->next = malloc(sizeof(MAP_NODE));
-                    p->next->key = get_json_string_copy(key);
+                    p->next->key = key;
                     p->next->data = data;
                     break;
                     }
@@ -474,4 +474,3 @@ void destroy_json(JSON *doomed)
     free(doomed->work_buffer);
     free(doomed);
     }
-
