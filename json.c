@@ -207,7 +207,7 @@ static void putc_work_buffer(JSON *json, char c)
         json->p = json->work_buffer + json->i;
         }
     *json->p++ = c;
-    ++json->i;
+    ++(json->i);
     }
 
 static char *parse_string(FILE *f, JSON *json)
@@ -224,22 +224,21 @@ static char *parse_string(FILE *f, JSON *json)
             case '"':
             case '/':
             case '\\':
-                putc_work_buffer(json, c);
                 break;
             case 'b':
-                putc_work_buffer(json, '\b');
+                c = '\b';
                 break;
             case 'f':
-                putc_work_buffer(json, '\f');
+                c = '\f';
                 break;
             case 'n':
-                putc_work_buffer(json, '\n');
+                c = '\n';
                 break;
             case 'r':
-                putc_work_buffer(json, '\r');
+                c = '\r';
                 break;
             case 't':
-                putc_work_buffer(json, '\t');
+                c = '\t';
                 break;
             default:
                 fatal("invalid escape sequence");
