@@ -106,12 +106,12 @@ static int skip_whitespace(FILE *f)
     return c;
     }
 
-static void put_data_map(MAP *map, const char *key, DATA *data)
+static void put_data_map(MAP *map, char *key, DATA *data)
     {
     if (!map->head)
         {
         map->head = malloc(sizeof(MAP_NODE));
-        map->head->key = get_json_string_copy(key);
+        map->head->key = key;
         map->head->data = data;
         map->head->next = NULL;
         }
@@ -294,8 +294,6 @@ static void parse_into_map(FILE *f, MAP *map, JSON *json);
 
 static void parse_into_array(FILE *f, ARRAY *array, JSON *json)
     {
-    // put_data_array(array, NULL);
-    //
     int c = skip_whitespace(f);
     DATA *data;
     switch (c)
@@ -334,7 +332,50 @@ static void parse_into_array(FILE *f, ARRAY *array, JSON *json)
 
 static void parse_into_map(FILE *f, MAP *map, JSON *json)
     {
-    put_data_map(map, NULL, NULL);
+    int c = skip_whitespace(f);
+    if (c == '}')
+        return;
+    else if (c != '"')
+        fatal("string expected");
+
+    char *key = get_json_string_copy(parse_string(f, json));
+
+    c = skip_whitespace(f);
+    if (c != ':')
+        fatal("invalid map-pair");
+    c = skip_whitespace(f);
+
+    DATA *data;
+    switch (c)
+        {
+    case '{':
+        data = create_data_map();
+        parse_into_map(f, data->data.map, json);
+        break;
+    case '[':
+        data = create_data_array();
+        parse_into_array(f, data->data.array, json);
+        break;
+    case '"':
+        data = create_data_string(parse_string(f, json));
+        break;
+    case 't':
+    case 'f':
+        data = create_data_boolean(parse_boolean(f));
+        break;
+    case 'n':
+        parse_null(f);
+        data = create_data_null();
+        break;
+    default:
+        data = create_data_number(parse_number(f, c, json));
+        }
+    put_data_map(map, key, data);
+    c = skip_whitespace(f);
+    if (c == ',')
+        parse_into_map(f, map, json); // recursion
+    else if (c != '}')
+        fatal("invalid map");
     }
 
 
