@@ -47,7 +47,7 @@ static DATA *create_data_boolean(int b)
     return data;
     }
 
- static DATA *create_data_null()
+static DATA *create_data_null()
     {
     DATA *data = malloc(sizeof(DATA));
     data->type = null;
@@ -406,41 +406,6 @@ static void parse_into_map(FILE *f, MAP *map, JSON *json)
     }
 
 
-JSON *init_json_file(FILE *f)
-    {
-    JSON *json = create_json();
-    int c = skip_whitespace(f);
-    switch (c)
-        {
-    case '{':
-        json->data = create_data_map();
-        parse_into_map(f, json->data->data.map, json);
-        break;
-    case '[':
-        json->data = create_data_array();
-        parse_into_array(f, json->data->data.array, json);
-        break;
-    case '"':
-        json->data = create_data_string(parse_string(f, json));
-        break;
-    case 't':
-    case 'f':
-        json->data = create_data_boolean(parse_boolean(f));
-        break;
-    case 'n':
-        parse_null(f);
-        json->data = create_data_null();
-        break;
-    default:
-        json->data = create_data_number(parse_number(f, c, json));
-        }
-
-    if (skip_whitespace(f) != EOF)
-        fatal("invalid json, garbage at end");
-
-    return json;
-    }
-
 static void recurse_and_destroy_map(MAP *);
 static void recurse_and_destroy_array(ARRAY *);
 
@@ -497,6 +462,41 @@ static void recurse_and_destroy_map(MAP *doomed)
         }
     }
 
+
+JSON *parse_json_file(FILE *f)
+    {
+    JSON *json = create_json();
+    int c = skip_whitespace(f);
+    switch (c)
+        {
+    case '{':
+        json->data = create_data_map();
+        parse_into_map(f, json->data->data.map, json);
+        break;
+    case '[':
+        json->data = create_data_array();
+        parse_into_array(f, json->data->data.array, json);
+        break;
+    case '"':
+        json->data = create_data_string(parse_string(f, json));
+        break;
+    case 't':
+    case 'f':
+        json->data = create_data_boolean(parse_boolean(f));
+        break;
+    case 'n':
+        parse_null(f);
+        json->data = create_data_null();
+        break;
+    default:
+        json->data = create_data_number(parse_number(f, c, json));
+        }
+
+    if (skip_whitespace(f) != EOF)
+        fatal("invalid json, garbage at end");
+
+    return json;
+    }
 
 void destroy_json(JSON *doomed)
     {
