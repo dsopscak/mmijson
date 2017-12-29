@@ -129,6 +129,7 @@ static void put_data_map(MAP *map, char *key, DATA *data)
                     p->next = malloc(sizeof(MAP_NODE));
                     p->next->key = key;
                     p->next->data = data;
+                    p->next->next = NULL;
                     break;
                     }
                 }
