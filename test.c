@@ -9,6 +9,7 @@ int main(int argc, char **argv)
     ret_json_string(s);
 
     JSON *json = parse_json_file(stdin);
+    dump_json(json, stdout);
     destroy_json(json);
 
     return 0;

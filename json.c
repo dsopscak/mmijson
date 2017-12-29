@@ -423,6 +423,7 @@ static void recurse_and_destroy_data(DATA *doomed)
         }
     }
 
+
 static void recurse_and_destroy_array_node(ARRAY_NODE *doomed)
     {
     if (doomed)
@@ -462,6 +463,52 @@ static void recurse_and_destroy_map(MAP *doomed)
         }
     }
 
+static void dump_string(const char *string, FILE *f)
+    {
+    }
+
+static void dump_map(MAP *, FILE *);
+static void dump_array(ARRAY *, FILE *);
+
+static void dump_data(DATA *data, FILE *f)
+    {
+    if (data)
+        {
+        switch (data->type)
+            {
+        case map:
+            dump_map(data->data.map, f);
+            break;
+        case array:
+            dump_array(data->data.array, f);
+            break;
+        case string:
+            dump_string(data->data.string, f);
+            break;
+        default:
+            fprintf(f, "%s", data->data.string);
+            break;
+            }
+        }
+    }
+
+static void dump_array_node(ARRAY_NODE *node, FILE *f)
+    {
+    }
+
+static void dump_array(ARRAY *array, FILE *f)
+    {
+    dump_array_node(array->head, f);
+    }
+
+static void dump_map_node(MAP_NODE *node, FILE *f)
+    {
+    }
+
+static void dump_map(MAP *map, FILE *f)
+    {
+    dump_map_node(map->head, f);
+    }
 
 JSON *parse_json_file(FILE *f)
     {
@@ -503,4 +550,9 @@ void destroy_json(JSON *doomed)
     recurse_and_destroy_data(doomed->data);
     free(doomed->work_buffer);
     free(doomed);
+    }
+
+void dump_json(JSON *json, FILE *f)
+    {
+    dump_data(json->data, f);
     }

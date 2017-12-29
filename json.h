@@ -11,6 +11,7 @@
 typedef struct JSON JSON;
 
 JSON *parse_json_file(FILE *);
+void dump_json(JSON *, FILE *);
 void destroy_json(JSON *);
 
 #endif
