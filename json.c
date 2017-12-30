@@ -528,20 +528,44 @@ static void dump_data(DATA *data, FILE *f)
 
 static void dump_array_node(ARRAY_NODE *node, FILE *f)
     {
+    if (node)
+        {
+        dump_data(node->data, f);
+        if (node->next)
+            {
+            fputc(',', f);
+            dump_array_node(node->next, f); // recursion
+            }
+        }
     }
 
 static void dump_array(ARRAY *array, FILE *f)
     {
+    fputc('[', f);
     dump_array_node(array->head, f);
+    fputc(']', f);
     }
 
 static void dump_map_node(MAP_NODE *node, FILE *f)
     {
-    }
+    if (node)
+        {
+        dump_string(node->key, f);
+        fputc(':', f);
+        dump_data(node->data, f);
+        if (node->next)
+            {
+            fputc(',', f);
+            dump_map_node(node->next, f); // recursion
+            }
+        }
+     }
 
 static void dump_map(MAP *map, FILE *f)
     {
+    fputc('{', f);
     dump_map_node(map->head, f);
+    fputc('}', f);
     }
 
 JSON *parse_json_file(FILE *f)
