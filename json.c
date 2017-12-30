@@ -465,6 +465,40 @@ static void recurse_and_destroy_map(MAP *doomed)
 
 static void dump_string(const char *string, FILE *f)
     {
+    fputc('"', f);
+    char const *p = string;
+    while (*p)
+        {
+        switch (*p)
+            {
+        case '"':
+            fprintf(f, "\\\"");
+            break;
+        case '\\':
+            fprintf(f, "\\\\");
+            break;
+        case '\b':
+            fprintf(f, "\\b");
+            break;
+        case '\f':
+            fprintf(f, "\\f");
+            break;
+        case '\n':
+            fprintf(f, "\\n");
+            break;
+        case '\r':
+            fprintf(f, "\\r");
+            break;
+        case '\t':
+            fprintf(f, "\\t");
+            break;
+        default:
+            fputc(*p, f);
+            break;
+            }
+        ++p; 
+        }
+    fputc('"', f);
     }
 
 static void dump_map(MAP *, FILE *);
