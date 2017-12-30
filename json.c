@@ -326,7 +326,8 @@ static void parse_into_array(FILE *f, ARRAY *array, JSON *json)
     switch (c)
         {
     case ']':
-        return;
+        fatal("unexpected end of array");
+        break;
     case '{':
         data = create_data_map();
         parse_into_map(f, data->data.map, json);
@@ -361,7 +362,7 @@ static void parse_into_map(FILE *f, MAP *map, JSON *json)
     {
     int c = skip_whitespace(f);
     if (c == '}')
-        return;
+        fatal("unecpected end of map");
     else if (c != '"')
         fatal("string expected");
 

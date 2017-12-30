@@ -1,4 +1,1 @@
-BUG: allows trailing comma at end of map or array, like [1,2,3,]. Fix
-probably in pare_into_* functions.
-
 BUG: doesn't support unicode escape sequences
