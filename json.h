@@ -13,6 +13,10 @@
 #include <stdbool.h>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct JSON JSON;
 typedef struct JSON_DATA JSON_DATA;
 
@@ -45,5 +49,9 @@ JSON_DATA **json_array(JSON_DATA *); // NULL-terminated array
 JSON_DATA *json_get_data(JSON_DATA *, const char *query_string); 
 // nestable query with comma-separated keys/indicies, starting at
 // given data node. Return NULL if nothing found.
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

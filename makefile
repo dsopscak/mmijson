@@ -9,5 +9,11 @@ libmmijson.a: $(LIB_FILES)
 test: test.o libmmijson.a
 	$(CC) $^ -o test && ./test < test.json
 
+testcpp.o: test.c
+	g++ -c -o testcpp.o test.c
+
+testcpp: testcpp.o libmmijson.a
+	g++ $^ -o testcpp && ./testcpp < test.json
+
 clean:
-	rm *.o *.a test
+	rm *.o *.a test testcpp

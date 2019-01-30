@@ -68,7 +68,6 @@ int main(int argc, char **argv)
         printf("  %s\n", json_string(*da));
         ++da;
         }
-    printf("%s is the 3rd 'P'\n", json_string(d));
     d = json_get_data(root, "bands");
     assert(d);
     d = json_get_data(root, "big_string2");
