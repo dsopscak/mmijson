@@ -3,8 +3,11 @@ CC = gcc
 LIB_FILES = string.o \
 			json.o
 
-test: test.o $(LIB_FILES)
+libmmijson.a: $(LIB_FILES)
+	ar rcs $@ $^
+
+test: test.o libmmijson.a
 	$(CC) $^ -o test && ./test < test.json
 
 clean:
-	rm *.o test
+	rm *.o *.a test
