@@ -4,7 +4,7 @@ LIB_FILES = string.o \
 			json.o
 
 test: test.o $(LIB_FILES)
-	$(CC) $^ && ./a.out
+	$(CC) $^ -o test && ./test < test.json
 
 clean:
-	rm *.o a.out
+	rm *.o test
