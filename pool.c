@@ -1,11 +1,36 @@
-//  Pool.c
+//  pool.c
 //
 //  (c) 2019 Skip Sopscak
 //  This code is licensed under MIT license (see LICENSE for details)
 
-#include "Pool.h"
+#include "pool.h"
 
 #include <stdlib.h>
+
+/* This is supposed to be conserned with alignment, hopefully this
+ * value makes sense... not sure what the significance of substracting
+ * 16 is.
+ */
+#define POOL_CHUNK_SIZE (1024*8-16)
+
+struct PoolLink
+    {
+    struct PoolLink *next;
+    };
+
+struct PoolChunk
+    {
+    struct PoolChunk *next;
+    char mem[POOL_CHUNK_SIZE];
+    };
+
+struct Pool
+    {
+    struct PoolChunk *chunks;
+    size_t esize;
+    struct PoolLink *head;
+    };
+
 
 static int 
 grow(Pool *target)
@@ -36,9 +61,10 @@ grow(Pool *target)
     }
         
 
-int
-PoolInit(Pool *target, size_t size)
+Pool *
+PoolCreate(size_t size)
     {
+    Pool *target = malloc(sizeof(Pool));
     target->esize = 
         size < sizeof(struct PoolLink *) ? 
             sizeof(struct PoolLink *) : size;
@@ -61,6 +87,7 @@ PoolDestroy(Pool *target)
         n = n->next;
         free(p);
         }
+    free(target);
     }
 
 

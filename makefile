@@ -1,7 +1,8 @@
 CFLAGS = -std=c99 -Wall -Werror -g -D_GNU_SOURCE
 CC = gcc
 LIB_FILES = string.o \
-            json.o
+            json.o \
+			pool.o
 
 libmmijson.a: $(LIB_FILES)
 	ar rcs $@ $^
