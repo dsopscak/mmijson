@@ -16,4 +16,4 @@ testcpp: testcpp.o libmmijson.a
 	g++ $^ -o testcpp && ./testcpp < test.json
 
 clean:
-	rm *.o *.a test testcpp
+	rm *.o *.a *.exe test testcpp

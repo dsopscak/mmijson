@@ -1,4 +1,8 @@
 a.out
+*.exe
 *.o
 .*.swp
 *.a
+.vagrant
+test
+testcpp
