@@ -1,3 +1,10 @@
+//  string.h
+//
+//  (c) 2019 Skip Sopscak
+//  This code is licensed under MIT license (see LICENSE for details)
+//
+//  Public interface for a string allocation abstraction
+
 #ifndef __mmijson_string_h
 #define __mmijson_string_h
 

@@ -1,4 +1,7 @@
-// test.c
+//  test.c
+//
+//  (c) 2019 Skip Sopscak
+//  This code is licensed under MIT license (see LICENSE for details)
 
 #include "string.h"
 #include "json.h"

@@ -1,4 +1,9 @@
 //  json.h
+//
+//  (c) 2019 Skip Sopscak
+//  This code is licensed under MIT license (see LICENSE for details)
+//
+//  Public interface for a simple json parser
 
 #ifndef __mmijson_json_h
 #define __mmijson_json_h
