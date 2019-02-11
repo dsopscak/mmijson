@@ -13,12 +13,17 @@
 #include <stddef.h>
 #endif
 
+#ifndef __json_h
+#define __json_h
+#include "json.h"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-char *get_json_string(size_t);
-void ret_json_string(char *);
+char *get_json_string(JSON *, size_t);
+void ret_json_string(JSON *, char *);
 
 #ifdef __cplusplus
 }

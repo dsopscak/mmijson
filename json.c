@@ -5,6 +5,7 @@
 
 #include "json.h"
 #include "string.h"
+#include "pool.h"
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -14,7 +15,6 @@
 #define ARRAY_INC 2 
 #define QUERY_DELIM ','
 
-typedef struct MAP MAP;
 typedef struct MAP_NODE MAP_NODE;
 typedef struct ARRAY ARRAY;
 
@@ -30,47 +30,59 @@ struct JSON_DATA
     union
         {
         char *string;
-        MAP *map;
+        MAP_NODE *map;
         ARRAY *array;
         } data;
     };
 
-static char *get_json_string_copy(const char *s)
+struct JSON
     {
-    char *copy = get_json_string(strlen(s));
+    Pool *data_pool;
+    Pool *map_pool;
+    Pool *array_pool;
+    JSON_DATA *data;
+    char *work_buffer;
+    char *p;
+    size_t work_buffer_size;
+    size_t i;
+    };
+
+static char *get_json_string_copy(JSON *json, const char *s)
+    {
+    char *copy = get_json_string(json, strlen(s));
     strcpy(copy, s);
     return copy;
     }
 
-static JSON_DATA *create_data_boolean(int b)
+static JSON_DATA *create_data_boolean(JSON *json, int b)
     {
-    JSON_DATA *data = malloc(sizeof(JSON_DATA));
+    JSON_DATA *data = PoolAlloc(json->data_pool);
     data->type = boolean;
-    data->data.string = get_json_string_copy(b ? "true" : "false");
+    data->data.string = get_json_string_copy(json, b ? "true" : "false");
     return data;
     }
 
-static JSON_DATA *create_data_null()
+static JSON_DATA *create_data_null(JSON *json)
     {
-    JSON_DATA *data = malloc(sizeof(JSON_DATA));
+    JSON_DATA *data = PoolAlloc(json->data_pool);
     data->type = null;
-    data->data.string = get_json_string_copy("null");
+    data->data.string = get_json_string_copy(json, "null");
     return data;
     }
 
-static JSON_DATA *create_data_string(const char *s)
+static JSON_DATA *create_data_string(JSON *json, const char *s)
     {
-    JSON_DATA *data = malloc(sizeof(JSON_DATA));
+    JSON_DATA *data = PoolAlloc(json->data_pool);
     data->type = string;
-    data->data.string = get_json_string_copy(s);
+    data->data.string = get_json_string_copy(json, s);
     return data;
     }
 
-static JSON_DATA *create_data_number(char *s)
+static JSON_DATA *create_data_number(JSON *json, char *s)
     {
-    JSON_DATA *data = malloc(sizeof(JSON_DATA));
+    JSON_DATA *data = PoolAlloc(json->data_pool);
     data->type = number;
-    data->data.string = get_json_string_copy(s);
+    data->data.string = get_json_string_copy(json, s);
     return data;
     }
 
@@ -81,17 +93,11 @@ struct MAP_NODE
     MAP_NODE *next;
     };
 
-struct MAP
+static JSON_DATA *create_data_map(JSON *json)
     {
-    MAP_NODE *head;
-    };
-
-static JSON_DATA *create_data_map()
-    {
-    JSON_DATA *data = malloc(sizeof(JSON_DATA));
+    JSON_DATA *data = PoolAlloc(json->data_pool);
     data->type = map;
-    data->data.map = malloc(sizeof(MAP));
-    data->data.map->head = NULL;
+    data->data.map = NULL;
     return data;
     }
 
@@ -103,18 +109,18 @@ static int skip_whitespace(FILE *f)
     return c;
     }
 
-static void put_data_map(MAP *map, char *key, JSON_DATA *data)
+static void put_data_map(JSON *json, char *key, JSON_DATA *data)
     {
-    if (!map->head)
+    if (!json->data->data.map)
         {
-        map->head = malloc(sizeof(MAP_NODE));
-        map->head->key = key;
-        map->head->data = data;
-        map->head->next = NULL;
+        json->data->data.map = PoolAlloc(json->map_pool);
+        json->data->data.map->key = key;
+        json->data->data.map->data = data;
+        json->data->data.map->next = NULL;
         }
     else
         {
-        MAP_NODE *p = map->head;
+        MAP_NODE *p = json->data->data.map;
         while (true)
             {
             if (strcmp(p->key, key))
@@ -123,7 +129,7 @@ static void put_data_map(MAP *map, char *key, JSON_DATA *data)
                     p = p->next;
                 else
                     {
-                    p->next = malloc(sizeof(MAP_NODE));
+                    p->next = PoolAlloc(json->map_pool);
                     p->next->key = key;
                     p->next->data = data;
                     p->next->next = NULL;
@@ -147,11 +153,11 @@ struct ARRAY
     size_t next;
     };
 
-static JSON_DATA *create_data_array()
+static JSON_DATA *create_data_array(JSON *json)
     {
-    JSON_DATA *data = malloc(sizeof(JSON_DATA));
+    JSON_DATA *data = PoolAlloc(json->data_pool);
     data->type = array;
-    data->data.array = malloc(sizeof(ARRAY));
+    data->data.array = PoolAlloc(json->array_pool);
     data->data.array->size = ARRAY_INC;
     data->data.array->next = 0;
     data->data.array->array = 
@@ -171,18 +177,12 @@ static void put_data_array(ARRAY *array, JSON_DATA *data)
         }
     }
 
-struct JSON
-    {
-    JSON_DATA *data;
-    char *work_buffer;
-    char *p;
-    size_t work_buffer_size;
-    size_t i;
-    };
-
 static JSON *create_json(void)
     {
     JSON *json = malloc(sizeof(JSON));
+    json->data_pool = PoolCreate(sizeof(JSON_DATA));
+    json->map_pool = PoolCreate(sizeof(MAP_NODE));
+    json->array_pool = PoolCreate(sizeof(ARRAY));
     json->data = NULL;
     json->work_buffer = malloc(BUF_INC);
     json->work_buffer_size = BUF_INC;
@@ -314,7 +314,7 @@ static void parse_null(FILE *f)
     }
 
 
-static void parse_into_map(FILE *f, MAP *map, JSON *json);
+static void parse_into_map(FILE *f, MAP_NODE *map, JSON *json);
 
 static void parse_into_array(FILE *f, ARRAY *array, JSON *json)
     {
@@ -328,26 +328,26 @@ static void parse_into_array(FILE *f, ARRAY *array, JSON *json)
         else
             return;
     case '{':
-        data = create_data_map();
+        data = create_data_map(json);
         parse_into_map(f, data->data.map, json);
         break;
     case '[':
-        data = create_data_array();
+        data = create_data_array(json);
         parse_into_array(f, data->data.array, json);
         break;
     case '"':
-        data = create_data_string(parse_string(f, json));
+        data = create_data_string(json, parse_string(f, json));
         break;
     case 't':
     case 'f':
-        data = create_data_boolean(parse_boolean(f));
+        data = create_data_boolean(json, parse_boolean(f));
         break;
     case 'n':
         parse_null(f);
-        data = create_data_null();
+        data = create_data_null(json);
         break;
     default:
-        data = create_data_number(parse_number(f, c, json));
+        data = create_data_number(json, parse_number(f, c, json));
         }
     put_data_array(array, data);
     c = skip_whitespace(f);
@@ -357,12 +357,12 @@ static void parse_into_array(FILE *f, ARRAY *array, JSON *json)
         fatal("invalid array");
     }
 
-static void parse_into_map(FILE *f, MAP *map, JSON *json)
+static void parse_into_map(FILE *f, MAP_NODE *map, JSON *json)
     {
     int c = skip_whitespace(f);
     if (c == '}')
         {
-        if (map->head)
+        if (map)
             fatal("unexpected end of map");
         else
             return;
@@ -370,7 +370,7 @@ static void parse_into_map(FILE *f, MAP *map, JSON *json)
     else if (c != '"')
         fatal("string expected");
 
-    char *key = get_json_string_copy(parse_string(f, json));
+    char *key = get_json_string_copy(json, parse_string(f, json));
 
     c = skip_whitespace(f);
     if (c != ':')
@@ -381,28 +381,28 @@ static void parse_into_map(FILE *f, MAP *map, JSON *json)
     switch (c)
         {
     case '{':
-        data = create_data_map();
+        data = create_data_map(json);
         parse_into_map(f, data->data.map, json);
         break;
     case '[':
-        data = create_data_array();
+        data = create_data_array(json);
         parse_into_array(f, data->data.array, json);
         break;
     case '"':
-        data = create_data_string(parse_string(f, json));
+        data = create_data_string(json, parse_string(f, json));
         break;
     case 't':
     case 'f':
-        data = create_data_boolean(parse_boolean(f));
+        data = create_data_boolean(json, parse_boolean(f));
         break;
     case 'n':
         parse_null(f);
-        data = create_data_null();
+        data = create_data_null(json);
         break;
     default:
-        data = create_data_number(parse_number(f, c, json));
+        data = create_data_number(json, parse_number(f, c, json));
         }
-    put_data_map(map, key, data);
+    put_data_map(json, key, data);
     c = skip_whitespace(f);
     if (c == ',')
         parse_into_map(f, map, json); // recursion
@@ -411,53 +411,44 @@ static void parse_into_map(FILE *f, MAP *map, JSON *json)
     }
 
 
-static void recurse_and_destroy_map(MAP *);
-static void recurse_and_destroy_array(ARRAY *);
+static void recurse_and_destroy_map_node(JSON *, MAP_NODE *);
+static void recurse_and_destroy_array(JSON *, ARRAY *);
 
-static void recurse_and_destroy_data(JSON_DATA *doomed)
+static void recurse_and_destroy_data(JSON *json, JSON_DATA *doomed)
     {
     if (doomed)
         {
         if (doomed->type == map)
-            recurse_and_destroy_map(doomed->data.map);
+            recurse_and_destroy_map_node(json, doomed->data.map);
         else if (doomed->type == array)
-            recurse_and_destroy_array(doomed->data.array);
+            recurse_and_destroy_array(json, doomed->data.array);
         else
-            ret_json_string(doomed->data.string);
-        free(doomed);
+            ret_json_string(json, doomed->data.string);
         }
     }
 
 
-static void recurse_and_destroy_array(ARRAY *doomed)
+static void recurse_and_destroy_array(JSON *json, ARRAY *doomed)
     {
     if (doomed)
         {
         for (int i = 0; i < doomed->next; ++i)
-            recurse_and_destroy_data(doomed->array[i]);
-        free(doomed);
+            recurse_and_destroy_data(json, doomed->array[i]);
+        free(doomed->array);
         }
     }
 
-static void recurse_and_destroy_map_node(MAP_NODE *doomed)
+static void recurse_and_destroy_map_node(JSON *json, MAP_NODE *doomed)
     {
     if (doomed)
         {
-        recurse_and_destroy_map_node(doomed->next);
-        recurse_and_destroy_data(doomed->data);
-        ret_json_string(doomed->key);
-        free(doomed);
+        recurse_and_destroy_map_node(json, doomed->next);
+        recurse_and_destroy_data(json, doomed->data);
+        ret_json_string(json, doomed->key);
+        //PoolFree(json->map_pool, doomed);
         }
     }
 
-static void recurse_and_destroy_map(MAP *doomed)
-    {
-    if (doomed)
-        {
-        recurse_and_destroy_map_node(doomed->head);
-        free(doomed);
-        }
-    }
 
 static void dump_string(const char *string, FILE *f)
     {
@@ -497,7 +488,7 @@ static void dump_string(const char *string, FILE *f)
     fputc('"', f);
     }
 
-static void dump_map(MAP *, FILE *);
+static void dump_map(MAP_NODE *, FILE *);
 static void dump_array(ARRAY *, FILE *);
 
 static void dump_data(JSON_DATA *data, FILE *f)
@@ -550,10 +541,10 @@ static void dump_map_node(MAP_NODE *node, FILE *f)
         }
      }
 
-static void dump_map(MAP *map, FILE *f)
+static void dump_map(MAP_NODE *map, FILE *f)
     {
     fputc('{', f);
-    dump_map_node(map->head, f);
+    dump_map_node(map, f);
     fputc('}', f);
     }
 
@@ -564,26 +555,26 @@ JSON *json_parse_file(FILE *f)
     switch (c)
         {
     case '{':
-        json->data = create_data_map();
+        json->data = create_data_map(json);
         parse_into_map(f, json->data->data.map, json);
         break;
     case '[':
-        json->data = create_data_array();
+        json->data = create_data_array(json);
         parse_into_array(f, json->data->data.array, json);
         break;
     case '"':
-        json->data = create_data_string(parse_string(f, json));
+        json->data = create_data_string(json, parse_string(f, json));
         break;
     case 't':
     case 'f':
-        json->data = create_data_boolean(parse_boolean(f));
+        json->data = create_data_boolean(json, parse_boolean(f));
         break;
     case 'n':
         parse_null(f);
-        json->data = create_data_null();
+        json->data = create_data_null(json);
         break;
     default:
-        json->data = create_data_number(parse_number(f, c, json));
+        json->data = create_data_number(json, parse_number(f, c, json));
         }
 
     if (skip_whitespace(f) != EOF)
@@ -605,8 +596,11 @@ JSON *json_parse_string(const char *s)
 
 void json_destroy(JSON *doomed)
     {
-    recurse_and_destroy_data(doomed->data);
+    recurse_and_destroy_data(doomed, doomed->data);
     free(doomed->work_buffer);
+    PoolDestroy(doomed->data_pool);
+    PoolDestroy(doomed->map_pool);
+    PoolDestroy(doomed->array_pool);
     free(doomed);
     }
 
@@ -676,9 +670,9 @@ bool json_is_array(JSON_DATA *data)
     return data->type == array;
     }
 
-static JSON_DATA *find_map_data(MAP *map, const char *key)
+static JSON_DATA *find_map_data(MAP_NODE *map, const char *key)
     {
-    MAP_NODE *node = map->head;
+    MAP_NODE *node = map;
     while (node && strcmp(node->key, key))
         node = node->next;
     if (node)
