@@ -28,6 +28,7 @@ int main(int argc, char **argv)
         "[1,2]",
         "[1,2,\"foo\"]",
         "{\"foo\": \"bar\", \"baz\": \"blah\"}",
+        "{\"a\": {\"foo\": \"bar\", \"baz\": \"blah\"}, \"b\": {\"foo\": \"bar\", \"baz\": \"blah\"}}",
         "  \" foobar \"  "
     };
 
