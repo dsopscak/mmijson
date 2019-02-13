@@ -72,7 +72,7 @@ PoolCreate(size_t size)
     target->head = NULL;
     target->chunks = NULL;
 
-    return 0;
+    return target;
     }
 
 

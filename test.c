@@ -28,6 +28,7 @@ int main(int argc, char **argv)
         "[1,2]",
         "[1,2,\"foo\"]",
         "{\"foo\": \"bar\", \"baz\": \"blah\"}",
+        "{\"a\": {\"foo\": \"bar\", \"baz\": \"blah\"}, \"b\": {\"foo\": \"bar\", \"baz\": \"blah\"}}",
         "  \" foobar \"  "
     };
 
@@ -60,7 +61,9 @@ int main(int argc, char **argv)
         {
         JSON *json = json_parse_string(big_test);
         json_destroy(json);
+        printf(".");
         }
+    printf("\n");
 
 #endif
 

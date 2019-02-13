@@ -109,18 +109,18 @@ static int skip_whitespace(FILE *f)
     return c;
     }
 
-static void put_data_map(JSON *json, char *key, JSON_DATA *data)
+static void put_data_map(JSON *json, JSON_DATA *map, char *key, JSON_DATA *data)
     {
-    if (!json->data->data.map)
+    if (!map->data.map)
         {
-        json->data->data.map = PoolAlloc(json->map_pool);
-        json->data->data.map->key = key;
-        json->data->data.map->data = data;
-        json->data->data.map->next = NULL;
+        map->data.map = PoolAlloc(json->map_pool);
+        map->data.map->key = key;
+        map->data.map->data = data;
+        map->data.map->next = NULL;
         }
     else
         {
-        MAP_NODE *p = json->data->data.map;
+        MAP_NODE *p = map->data.map;
         while (true)
             {
             if (strcmp(p->key, key))
@@ -314,7 +314,7 @@ static void parse_null(FILE *f)
     }
 
 
-static void parse_into_map(FILE *f, MAP_NODE *map, JSON *json);
+static void parse_into_map(FILE *f, JSON_DATA *map, JSON *json);
 
 static void parse_into_array(FILE *f, ARRAY *array, JSON *json)
     {
@@ -329,7 +329,7 @@ static void parse_into_array(FILE *f, ARRAY *array, JSON *json)
             return;
     case '{':
         data = create_data_map(json);
-        parse_into_map(f, data->data.map, json);
+        parse_into_map(f, data, json);
         break;
     case '[':
         data = create_data_array(json);
@@ -357,12 +357,12 @@ static void parse_into_array(FILE *f, ARRAY *array, JSON *json)
         fatal("invalid array");
     }
 
-static void parse_into_map(FILE *f, MAP_NODE *map, JSON *json)
+static void parse_into_map(FILE *f, JSON_DATA *map, JSON *json)
     {
     int c = skip_whitespace(f);
     if (c == '}')
         {
-        if (map)
+        if (map->data.map)
             fatal("unexpected end of map");
         else
             return;
@@ -382,7 +382,7 @@ static void parse_into_map(FILE *f, MAP_NODE *map, JSON *json)
         {
     case '{':
         data = create_data_map(json);
-        parse_into_map(f, data->data.map, json);
+        parse_into_map(f, data, json);
         break;
     case '[':
         data = create_data_array(json);
@@ -402,7 +402,7 @@ static void parse_into_map(FILE *f, MAP_NODE *map, JSON *json)
     default:
         data = create_data_number(json, parse_number(f, c, json));
         }
-    put_data_map(json, key, data);
+    put_data_map(json, map, key, data);
     c = skip_whitespace(f);
     if (c == ',')
         parse_into_map(f, map, json); // recursion
@@ -556,7 +556,7 @@ JSON *json_parse_file(FILE *f)
         {
     case '{':
         json->data = create_data_map(json);
-        parse_into_map(f, json->data->data.map, json);
+        parse_into_map(f, json->data, json);
         break;
     case '[':
         json->data = create_data_array(json);
