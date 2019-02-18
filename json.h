@@ -25,13 +25,24 @@ extern "C" {
 typedef struct JSON JSON;
 typedef struct JSON_DATA JSON_DATA;
 
-#ifdef _GNU_SOURCE
-JSON *json_parse_string(const char *);
-#endif
+JSON *json_parse_string(char *, bool should_free);
+// Parse the string into a JSON structure and return pointer to same.
+// Control of the string is surrendered and contents will be altered
+// by the call. Any subsequent changes to the string by the caller may
+// invalidate the JSON object and results are undefined. The string
+// will be freed on object destruction baseed on the value of
+// should_free. Returns NULL if the string isn't valid JSON, but
+// contents may still have been altered.
 
 JSON *json_parse_file(FILE *);
+
 void json_dump(JSON *, FILE *);
+// JSON * must have been returned by one of the parse methods above.
+
 void json_destroy(JSON *);
+// JSON * must have been returned by one of the parse methods above.
+// Releases all resources used by the JSON object, rendering it
+// unusable.
 
 JSON_DATA *json_get_root(JSON *);
 
@@ -52,8 +63,14 @@ bool json_is_array(JSON_DATA *);
 JSON_DATA **json_array(JSON_DATA *); // NULL-terminated array
 
 JSON_DATA *json_get_data(JSON_DATA *, const char *query_string); 
-// nestable query with comma-separated keys/indicies, starting at
+// Nestable query with comma-separated keys/indicies, starting at
 // given data node. Return NULL if nothing found.
+//
+// Example: "foo,7,bar"
+//
+// would find the boolean true object in the following json:
+//
+// { "foo": [ 0, 1, 2, 3, 4, 5, 6, { "bar": true }]}"
 
 #ifdef __cplusplus
 }

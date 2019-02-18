@@ -4,7 +4,6 @@
 //  This code is licensed under MIT license (see LICENSE for details)
 
 #include "json.h"
-#include "string.h"
 #include "pool.h"
 #include <stdlib.h>
 #include <string.h>
@@ -14,15 +13,11 @@
 #define BUF_INC 1024
 #define ARRAY_INC 2 
 #define QUERY_DELIM ','
+#define NOT_CHAR 10000
 
 typedef struct MAP_NODE MAP_NODE;
 typedef struct ARRAY ARRAY;
 
-static void fatal(const char *msg)
-    {
-    fprintf(stderr, "Fatal JSON error: %s\n", msg);
-    exit(-1);
-    }
 
 struct JSON_DATA
     {
@@ -37,28 +32,35 @@ struct JSON_DATA
 
 struct JSON
     {
+    enum { none = 0, bad_map, bad_array, bad_string, bad_number, 
+           bad_boolean, bad_null } error;
     Pool *data_pool;
     Pool *map_pool;
     Pool *array_pool;
     JSON_DATA *data;
+    char *token;
+    int char_ahead;
     char *work_buffer;
     char *p;
-    size_t work_buffer_size;
-    size_t i;
+    char *buffer;
     };
 
-static char *get_json_string_copy(JSON *json, const char *s)
+
+static char jgetc(JSON *json)
     {
-    char *copy = get_json_string(json, strlen(s));
-    strcpy(copy, s);
-    return copy;
+    if (json->char_ahead == NOT_CHAR)
+        return *json->p++;
+    char rval = json->char_ahead;
+    json->char_ahead = NOT_CHAR;
+    return rval;
     }
 
-static JSON_DATA *create_data_boolean(JSON *json, int b)
+
+static JSON_DATA *create_data_boolean(JSON *json)
     {
     JSON_DATA *data = PoolAlloc(json->data_pool);
     data->type = boolean;
-    data->data.string = get_json_string_copy(json, b ? "true" : "false");
+    data->data.string = json->token;
     return data;
     }
 
@@ -66,23 +68,23 @@ static JSON_DATA *create_data_null(JSON *json)
     {
     JSON_DATA *data = PoolAlloc(json->data_pool);
     data->type = null;
-    data->data.string = get_json_string_copy(json, "null");
+    data->data.string = json->token;
     return data;
     }
 
-static JSON_DATA *create_data_string(JSON *json, const char *s)
+static JSON_DATA *create_data_string(JSON *json)
     {
     JSON_DATA *data = PoolAlloc(json->data_pool);
     data->type = string;
-    data->data.string = get_json_string_copy(json, s);
+    data->data.string = json->token;
     return data;
     }
 
-static JSON_DATA *create_data_number(JSON *json, char *s)
+static JSON_DATA *create_data_number(JSON *json)
     {
     JSON_DATA *data = PoolAlloc(json->data_pool);
     data->type = number;
-    data->data.string = get_json_string_copy(json, s);
+    data->data.string = json->token;
     return data;
     }
 
@@ -101,10 +103,10 @@ static JSON_DATA *create_data_map(JSON *json)
     return data;
     }
 
-static int skip_whitespace(FILE *f)
+static int skip_whitespace(JSON *json)
     {
     char c;
-    while ((isspace(c = fgetc(f))))
+    while ((isspace(c = jgetc(json))))
         ;
     return c;
     }
@@ -180,43 +182,46 @@ static void put_data_array(ARRAY *array, JSON_DATA *data)
 static JSON *create_json(void)
     {
     JSON *json = malloc(sizeof(JSON));
+    json->error = none;
     json->data_pool = PoolCreate(sizeof(JSON_DATA));
     json->map_pool = PoolCreate(sizeof(MAP_NODE));
     json->array_pool = PoolCreate(sizeof(ARRAY));
     json->data = NULL;
-    json->work_buffer = malloc(BUF_INC);
-    json->work_buffer_size = BUF_INC;
+    json->buffer = NULL;
+    json->work_buffer = NULL;
+    json->char_ahead = NOT_CHAR;
+    json->token = NULL;
 
     return json;
     }
 
+
+static void terminate_token(JSON *json)
+    {
+    json->char_ahead = *json->p;
+    *json->p = '\0';
+    ++json->p;
+    }
+
 static void init_work_buffer(JSON *json)
     {
-    json->p = json->work_buffer;
-    json->i = 0;
+    json->token = json->work_buffer = json->p - 1;
     }
 
 static void putc_work_buffer(JSON *json, char c)
     {
-    if (json->i == json->work_buffer_size)
-        {
-        json->work_buffer_size += BUF_INC;
-        json->work_buffer = realloc(json->work_buffer, json->work_buffer_size);
-        json->p = json->work_buffer + json->i;
-        }
-    *json->p++ = c;
-    ++(json->i);
+    *json->work_buffer++ = c;
     }
 
-static char *parse_string(FILE *f, JSON *json)
+static int parse_string(JSON *json)
     {
     int c;
     init_work_buffer(json);
-    while ((c = fgetc(f)) != EOF)
+    while ((c = jgetc(json)) != '\0')
         {
         if (c == '\\')
             {
-            c = fgetc(f);
+            c = jgetc(json);
             switch (c)
                 {
             case '"':
@@ -239,175 +244,214 @@ static char *parse_string(FILE *f, JSON *json)
                 c = '\t';
                 break;
             default:
-                fatal("invalid escape sequence");
+                json->error = bad_string;
                 break;
                 }
             }
         else if (c == '\n' || iscntrl(c))
-            fatal("invalid string");
+            json->error = bad_string;
         else if (c == '"')
             break;
 
+        if (json->error)
+            break;
         putc_work_buffer(json, c);
         }
 
     if (c != '"')
-        fatal("EOF before end of string");
-
-    putc_work_buffer(json, 0);
-    return json->work_buffer;
+        json->error = bad_string;
+    else
+        putc_work_buffer(json, 0);
+    return json->error ? -1 : 0;
     }
 
-static char *parse_number(FILE *f, int c, JSON *json)
+static int parse_number(int c, JSON *json)
     {
-    init_work_buffer(json);
     bool is_dotted = false;
     if (c == '-' || isdigit(c))
         {
-        putc_work_buffer(json, c);
-        while ((c = fgetc(f)) != EOF)
+        while ((c = jgetc(json)) != '\0')
             {
             if (c == '.')
                 {
                 if (is_dotted)
-                    fatal("invalid number");
+                    {
+                    json->error = bad_number;
+                    return -1;
+                    }
                 else
                     is_dotted = true;
                 }
             else if (!isdigit(c))
                 {
-                ungetc(c, f);
+                --json->p;
                 break;
                 }
-            putc_work_buffer(json, c);
             }
-        putc_work_buffer(json, 0);
-        return json->work_buffer;
+        terminate_token(json);
+        return 0;
         }
-    fatal("invalid number");
-    return NULL;
-    }
-
-static int parse_boolean(FILE *f)
-    {
-    int c;
-    if ((c =fgetc(f)) == 'r')
-        if (fgetc(f) == 'u')
-            if (fgetc(f) == 'e')
-                return 1;
-    if (c == 'a')
-        if (fgetc(f) == 'l')
-            if (fgetc(f) == 's')
-                if (fgetc(f) == 'e')
-                    return 0;
-    fatal("invalid boolean value");
+    json->error = bad_number;
     return -1;
     }
 
-static void parse_null(FILE *f)
+static int parse_boolean(JSON *json)
     {
-    if (fgetc(f) == 'u')
-        if (fgetc(f) == 'l')
-            if (fgetc(f) == 'l')
-                return;
-    fatal("invalid null value");
+    char c;
+    if ((c =jgetc(json)) == 'r')
+        if (jgetc(json) == 'u')
+            if (jgetc(json) == 'e')
+                {
+                terminate_token(json);
+                return 0;
+                }
+    if (c == 'a')
+        if (jgetc(json) == 'l')
+            if (jgetc(json) == 's')
+                if (jgetc(json) == 'e')
+                    {
+                    terminate_token(json);
+                    return 0;
+                    }
+    json->error = bad_boolean;
+    return -1;
+    }
+
+static int parse_null(JSON *json)
+    {
+    if (jgetc(json) == 'u')
+        if (jgetc(json) == 'l')
+            if (jgetc(json) == 'l')
+                {
+                terminate_token(json);
+                return 0;
+                }
+    json->error = bad_null;
+    return -1;
     }
 
 
-static void parse_into_map(FILE *f, JSON_DATA *map, JSON *json);
+static int parse_into_map(JSON_DATA *map, JSON *json);
 
-static void parse_into_array(FILE *f, ARRAY *array, JSON *json)
+static int parse_into_array(ARRAY *array, JSON *json)
     {
-    int c = skip_whitespace(f);
+    char c = skip_whitespace(json);
+    init_work_buffer(json);
     JSON_DATA *data;
     switch (c)
         {
     case ']':
         if (array->next > 0)
-            fatal("unexpected end of array");
-        else
-            return;
+            {
+            json->error = bad_array;
+            return -1;
+            }
+        return 0;
     case '{':
         data = create_data_map(json);
-        parse_into_map(f, data, json);
+        parse_into_map(data, json);
         break;
     case '[':
         data = create_data_array(json);
-        parse_into_array(f, data->data.array, json);
+        parse_into_array(data->data.array, json);
         break;
     case '"':
-        data = create_data_string(json, parse_string(f, json));
+        if (parse_string(json) == 0)
+            data = create_data_string(json);
         break;
     case 't':
     case 'f':
-        data = create_data_boolean(json, parse_boolean(f));
+        if (parse_boolean(json) == 0)
+            data = create_data_boolean(json);
         break;
     case 'n':
-        parse_null(f);
-        data = create_data_null(json);
+        if (parse_null(json) == 0)
+            data = create_data_null(json);
         break;
     default:
-        data = create_data_number(json, parse_number(f, c, json));
+        if (parse_number(c, json) == 0)
+            data = create_data_number(json);
         }
-    put_data_array(array, data);
-    c = skip_whitespace(f);
-    if (c == ',')
-        parse_into_array(f, array, json); // recursion
-    else if (c != ']')
-        fatal("invalid array");
+    if (!json->error)
+        {
+        put_data_array(array, data);
+        c = skip_whitespace(json);
+        if (c == ',')
+            parse_into_array(array, json); // recursion
+        else if (c != ']')
+            json->error = bad_array;
+        }
+    return json->error ? -1 : 0;
     }
 
-static void parse_into_map(FILE *f, JSON_DATA *map, JSON *json)
+static int parse_into_map(JSON_DATA *map, JSON *json)
     {
-    int c = skip_whitespace(f);
+    char c = skip_whitespace(json);
+    init_work_buffer(json);
     if (c == '}')
         {
         if (map->data.map)
-            fatal("unexpected end of map");
-        else
-            return;
+            {
+            json->error = bad_map;
+            return -1;
+            }
+        return 0;
         }
     else if (c != '"')
-        fatal("string expected");
+        json->error = bad_map; // key/string not found
 
-    char *key = get_json_string_copy(json, parse_string(f, json));
-
-    c = skip_whitespace(f);
-    if (c != ':')
-        fatal("invalid map-pair");
-    c = skip_whitespace(f);
-
-    JSON_DATA *data;
-    switch (c)
+    char *key = json->token;
+    JSON_DATA *data = NULL;
+    if (!json->error && parse_string(json) == 0)
         {
-    case '{':
-        data = create_data_map(json);
-        parse_into_map(f, data, json);
-        break;
-    case '[':
-        data = create_data_array(json);
-        parse_into_array(f, data->data.array, json);
-        break;
-    case '"':
-        data = create_data_string(json, parse_string(f, json));
-        break;
-    case 't':
-    case 'f':
-        data = create_data_boolean(json, parse_boolean(f));
-        break;
-    case 'n':
-        parse_null(f);
-        data = create_data_null(json);
-        break;
-    default:
-        data = create_data_number(json, parse_number(f, c, json));
+        c = skip_whitespace(json);
+        if (c != ':')
+            json->error = bad_map;
+        else
+            {
+            c = skip_whitespace(json);
+            init_work_buffer(json);
+
+            switch (c)
+                {
+            case '{':
+                data = create_data_map(json);
+                parse_into_map(data, json);
+                break;
+            case '[':
+                data = create_data_array(json);
+                parse_into_array(data->data.array, json);
+                break;
+            case '"':
+                if (parse_string(json) == 0)
+                    data = create_data_string(json);
+                break;
+            case 't':
+            case 'f':
+                if (parse_boolean(json) == 0)
+                    data = create_data_boolean(json);
+                break;
+            case 'n':
+                if (parse_null(json) == 0)
+                    data = create_data_null(json);
+                break;
+            default:
+                if (parse_number(c, json) == 0)
+                    data = create_data_number(json);
+                }
+            }
         }
-    put_data_map(json, map, key, data);
-    c = skip_whitespace(f);
-    if (c == ',')
-        parse_into_map(f, map, json); // recursion
-    else if (c != '}')
-        fatal("invalid map");
+    if (!json->error)
+        {
+        put_data_map(json, map, key, data);
+        c = skip_whitespace(json);
+        if (c == ',')
+            parse_into_map(map, json); // recursion
+        else if (c != '}')
+            json->error = bad_map;
+        }
+
+    return json->error ? -1 : 0;
     }
 
 
@@ -422,8 +466,6 @@ static void recurse_and_destroy_data(JSON *json, JSON_DATA *doomed)
             recurse_and_destroy_map_node(json, doomed->data.map);
         else if (doomed->type == array)
             recurse_and_destroy_array(json, doomed->data.array);
-        else
-            ret_json_string(json, doomed->data.string);
         }
     }
 
@@ -444,7 +486,6 @@ static void recurse_and_destroy_map_node(JSON *json, MAP_NODE *doomed)
         {
         recurse_and_destroy_map_node(json, doomed->next);
         recurse_and_destroy_data(json, doomed->data);
-        ret_json_string(json, doomed->key);
         //PoolFree(json->map_pool, doomed);
         }
     }
@@ -548,59 +589,87 @@ static void dump_map(MAP_NODE *map, FILE *f)
     fputc('}', f);
     }
 
-JSON *json_parse_file(FILE *f)
+JSON *json_parse_string(char *s, bool should_free)
     {
     JSON *json = create_json();
-    int c = skip_whitespace(f);
+    json->p = s;
+    if (should_free)
+        json->buffer = s;
+    else
+        json->buffer = NULL;
+    
+    char c = skip_whitespace(json);
+    init_work_buffer(json);
     switch (c)
         {
     case '{':
         json->data = create_data_map(json);
-        parse_into_map(f, json->data, json);
+        parse_into_map(json->data, json);
         break;
     case '[':
         json->data = create_data_array(json);
-        parse_into_array(f, json->data->data.array, json);
+        parse_into_array(json->data->data.array, json);
         break;
     case '"':
-        json->data = create_data_string(json, parse_string(f, json));
+        if (parse_string(json) == 0)
+            json->data = create_data_string(json);
         break;
     case 't':
     case 'f':
-        json->data = create_data_boolean(json, parse_boolean(f));
+        if (parse_boolean(json) == 0)
+            json->data = create_data_boolean(json);
         break;
     case 'n':
-        parse_null(f);
-        json->data = create_data_null(json);
+        if (parse_null(json) == 0)
+            json->data = create_data_null(json);
         break;
     default:
-        json->data = create_data_number(json, parse_number(f, c, json));
+        if (parse_number(c, json) == 0)
+            json->data = create_data_number(json);
         }
 
-    if (skip_whitespace(f) != EOF)
-        fatal("invalid json, garbage at end");
+    if (skip_whitespace(json) != '\0' || json->error)
+        {
+        json_destroy(json);
+        json = NULL;
+        }
 
     return json;
     }
 
-#ifdef _GNU_SOURCE
-
-JSON *json_parse_string(const char *s)
+JSON *json_parse_file(FILE *f)
     {
-    FILE *f = fmemopen((void*)s, strlen(s), "r");
-    JSON *json = json_parse_file(f);
-    fclose(f);
-    return json;
+    char *buffer = NULL;
+    size_t sz = BUF_INC;
+    size_t read_so_far = 0;
+    while ((buffer = realloc(buffer, sz)))
+        {
+        read_so_far += fread(buffer + read_so_far, 1, BUF_INC, f); 
+        if (feof(f))
+            {
+            *(buffer + read_so_far) = '\0';
+            break;
+            }
+        if (ferror(f))
+            {
+            free(buffer);
+            return NULL;
+            }
+        sz += BUF_INC;
+        }
+    if (buffer)
+        return json_parse_string(buffer, true);
+    return NULL;
     }
-#endif
 
 void json_destroy(JSON *doomed)
     {
     recurse_and_destroy_data(doomed, doomed->data);
-    free(doomed->work_buffer);
     PoolDestroy(doomed->data_pool);
     PoolDestroy(doomed->map_pool);
     PoolDestroy(doomed->array_pool);
+    if (doomed->buffer)
+        free(doomed->buffer);
     free(doomed);
     }
 

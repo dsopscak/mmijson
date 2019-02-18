@@ -7,7 +7,7 @@
 
 #include <stdlib.h>
 
-/* This is supposed to be conserned with alignment, hopefully this
+/* This is supposed to be concerned with alignment, hopefully this
  * value makes sense... not sure what the significance of substracting
  * 16 is.
  */

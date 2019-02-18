@@ -13,10 +13,6 @@
 
 int main(int argc, char **argv)
     {
-    char *s = get_json_string(NULL, 1024);
-    ret_json_string(NULL, s);
-
-#ifdef _GNU_SOURCE
     const char *tstrings[] = { 
         "  27.312  ",
         "true",
@@ -34,7 +30,12 @@ int main(int argc, char **argv)
 
     for (int i = 0; i < sizeof(tstrings)/sizeof(tstrings[0]); ++i)
         {
-        JSON *json = json_parse_string(tstrings[i]);
+        JSON *json = json_parse_string(strdup(tstrings[i]), true);
+        if (!json)
+            {
+            printf("Parsing error\n");
+            exit(-1);
+            }
         JSON_DATA *data = json_get_root(json);
         if (json_is_string(data))
             printf("\nstring[%s]\n", json_string(data));
@@ -59,13 +60,11 @@ int main(int argc, char **argv)
         }
     for (int i = 0; i < 1024; ++i)
         {
-        JSON *json = json_parse_string(big_test);
+        JSON *json = json_parse_string(strdup(big_test), true);
         json_destroy(json);
         printf(".");
         }
     printf("\n");
-
-#endif
 
     FILE *f = fopen("test.json", "r");
     JSON *json = json_parse_file(f);
