@@ -92,8 +92,14 @@ int main(int argc, char **argv)
     json_destroy(json);
 
     json = json_parse_file(stdin);
-    json_dump(json, stdout);
-    printf("\n");
+    if (json)
+        {
+        json_dump(json, stdout);
+        printf("\n");
+        json_destroy(json);
+        }
+    else
+        printf("Parsing error\n");
 
     return 0;
     }
