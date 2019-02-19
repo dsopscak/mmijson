@@ -332,46 +332,54 @@ static int parse_null(JSON *json)
 
 
 static int parse_into_map(JSON_DATA *map, JSON *json);
+static int parse_into_array(ARRAY *array, JSON *json);
+
+static void parse_next_thing(char c, JSON_DATA **data, JSON *json)
+    {
+    init_work_buffer(json);
+    switch (c)
+        {
+    case '{':
+        *data = create_data_map(json);
+        parse_into_map(*data, json);
+        break;
+    case '[':
+        *data = create_data_array(json);
+        parse_into_array((*data)->data.array, json);
+        break;
+    case '"':
+        if (parse_string(json) == 0)
+            *data = create_data_string(json);
+        break;
+    case 't':
+    case 'f':
+        if (parse_boolean(json) == 0)
+            *data = create_data_boolean(json);
+        break;
+    case 'n':
+        if (parse_null(json) == 0)
+            *data = create_data_null(json);
+        break;
+    default:
+        if (parse_number(c, json) == 0)
+            *data = create_data_number(json);
+        }
+    }
 
 static int parse_into_array(ARRAY *array, JSON *json)
     {
+    JSON_DATA *data = NULL;
     char c = skip_whitespace(json);
-    init_work_buffer(json);
-    JSON_DATA *data;
-    switch (c)
+    if (c == ']')
         {
-    case ']':
         if (array->next > 0)
             {
             json->error = bad_array;
             return -1;
             }
         return 0;
-    case '{':
-        data = create_data_map(json);
-        parse_into_map(data, json);
-        break;
-    case '[':
-        data = create_data_array(json);
-        parse_into_array(data->data.array, json);
-        break;
-    case '"':
-        if (parse_string(json) == 0)
-            data = create_data_string(json);
-        break;
-    case 't':
-    case 'f':
-        if (parse_boolean(json) == 0)
-            data = create_data_boolean(json);
-        break;
-    case 'n':
-        if (parse_null(json) == 0)
-            data = create_data_null(json);
-        break;
-    default:
-        if (parse_number(c, json) == 0)
-            data = create_data_number(json);
         }
+    parse_next_thing(c, &data, json);
     if (!json->error)
         {
         put_data_array(array, data);
@@ -410,35 +418,7 @@ static int parse_into_map(JSON_DATA *map, JSON *json)
         else
             {
             c = skip_whitespace(json);
-            init_work_buffer(json);
-
-            switch (c)
-                {
-            case '{':
-                data = create_data_map(json);
-                parse_into_map(data, json);
-                break;
-            case '[':
-                data = create_data_array(json);
-                parse_into_array(data->data.array, json);
-                break;
-            case '"':
-                if (parse_string(json) == 0)
-                    data = create_data_string(json);
-                break;
-            case 't':
-            case 'f':
-                if (parse_boolean(json) == 0)
-                    data = create_data_boolean(json);
-                break;
-            case 'n':
-                if (parse_null(json) == 0)
-                    data = create_data_null(json);
-                break;
-            default:
-                if (parse_number(c, json) == 0)
-                    data = create_data_number(json);
-                }
+            parse_next_thing(c, &data, json);
             }
         }
     if (!json->error)
@@ -599,34 +579,7 @@ JSON *json_parse_string(char *s, bool should_free)
         json->buffer = NULL;
     
     char c = skip_whitespace(json);
-    init_work_buffer(json);
-    switch (c)
-        {
-    case '{':
-        json->data = create_data_map(json);
-        parse_into_map(json->data, json);
-        break;
-    case '[':
-        json->data = create_data_array(json);
-        parse_into_array(json->data->data.array, json);
-        break;
-    case '"':
-        if (parse_string(json) == 0)
-            json->data = create_data_string(json);
-        break;
-    case 't':
-    case 'f':
-        if (parse_boolean(json) == 0)
-            json->data = create_data_boolean(json);
-        break;
-    case 'n':
-        if (parse_null(json) == 0)
-            json->data = create_data_null(json);
-        break;
-    default:
-        if (parse_number(c, json) == 0)
-            json->data = create_data_number(json);
-        }
+    parse_next_thing(c, &(json->data), json);
 
     if (skip_whitespace(json) != '\0' || json->error)
         {
