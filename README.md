@@ -1,5 +1,5 @@
 # mmijson
-A simple, readonly (for now) json parser for C99
+A simple, readonly (for now), ascii json parser for C99. See json.h for documentation and test.c for usage examples.
 
 ## Build
 
