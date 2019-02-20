@@ -13,7 +13,7 @@
 
 int main(int argc, char **argv)
     {
-    const char *tstrings[] = { 
+    const char *good_strings[] = { 
         "  27.312  ",
         "true",
         "false",
@@ -28,9 +28,9 @@ int main(int argc, char **argv)
         "  \" foobar \"  "
     };
 
-    for (int i = 0; i < sizeof(tstrings)/sizeof(tstrings[0]); ++i)
+    for (int i = 0; i < sizeof(good_strings)/sizeof(good_strings[0]); ++i)
         {
-        JSON *json = json_parse_string(strdup(tstrings[i]), true);
+        JSON *json = json_parse_string(strdup(good_strings[i]), true);
         if (!json)
             {
             printf("Parsing error\n");
@@ -58,6 +58,31 @@ int main(int argc, char **argv)
         printf("\n");
         json_destroy(json);
         }
+    
+    const char *bad_strings[] = { 
+        "  27,312  ",
+        "txue",
+        "falsx",
+        "nullx",
+        "[1,]",
+        "{[}",
+        "[,1]",
+        "[1,2 2]",
+        "[1,2,foo\"]",
+        "{\"foo\": \"bar\", \"baz\"; \"blah\"}",
+        "{\"a\": [\"foo\": \"bar\", \"baz\": \"blah\"}, \"b\": {\"foo\": \"bar\", \"baz\": \"blah\"}}",
+        "  ' foobar \"  "
+    };
+    for (int i = 0; i < sizeof(bad_strings)/sizeof(bad_strings[0]); ++i)
+        {
+        JSON *json = json_parse_string(strdup(bad_strings[i]), true);
+        if (json)
+            {
+            printf("Missed parsing error[%s]\n", bad_strings[i]);
+            exit(-1);
+            }
+        }
+
     for (int i = 0; i < 1024; ++i)
         {
         JSON *json = json_parse_string(strdup(big_test), true);
